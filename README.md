@@ -15,6 +15,8 @@ By **Fabio Matricardi — The Poor GPU Guy** · part of the **CPU AI Lab** line 
   2. `llama-cli.exe --list-devices` reports a `Vulkan` device? (authoritative)
   3. Run logs confirm `offloaded N/N layers to GPU`
 
+<img src="https://github.com/fabiomatricardi/cpu-ai-lab/raw/main/CPU-AI-lab.gif" width=900>
+
   GPU confirmed → `-ngl 99` (adjustable) · otherwise → `-ngl 0`, silent CPU-only mode. You never type a flag.
 - **Honest KPIs** — prompt (prefill) t/s, generation t/s, live RAM bar (Host memory row), VRAM breakdown, layer offload, plus a plain-language verdict: SNAPPY / USABLE / SLOW / TOO SLOW.
 - **First-run warm-up hint** — the first GPU run compiles shaders; run twice, trust the second number.
@@ -27,6 +29,12 @@ By **Fabio Matricardi — The Poor GPU Guy** · part of the **CPU AI Lab** line 
 2. Double-click. First run downloads the pinned engine (~31 MB) next to the exe.
 3. Press **Get test model** → **Inspect** → **Run**.
 4. Hit **Copy Result Card** and share your numbers!
+
+<img src="https://github.com/fabiomatricardi/cpu-ai-lab/raw/main/cards.jpg" width=900>
+
+<img src="https://github.com/fabiomatricardi/cpu-ai-lab/raw/main/cards-miniCPM.png" width=700>
+
+---
 
 ## Quick start (developer)
 
