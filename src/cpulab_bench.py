@@ -36,7 +36,7 @@ from tkinter import filedialog, messagebox, ttk
 import psutil
 
 APP_NAME = "CPU AI Lab - Honest Bench"
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.1.1"
 
 # --- Pinned engine (Phase 1 contract) -------------------------------------
 PINNED_BUILD = "b11669"
@@ -153,7 +153,7 @@ class CpuLabBench:
 
         # ---------------- Top: engine / GPU status ----------------
         top = tk.Frame(root)
-        top.grid(row=0, column=0, columnspan=3, sticky="ew", padx=10, pady=(8, 0))
+        top.grid(row=0, column=0, columnspan=4, sticky="ew", padx=10, pady=(8, 0))
         self.engine_status = tk.StringVar(value="Engine: checking...")
         self.gpu_status = tk.StringVar(value="GPU: detecting...")
         tk.Label(top, textvariable=self.engine_status, fg="grey35",
@@ -168,7 +168,7 @@ class CpuLabBench:
         tk.Button(root, text="Browse", command=self.browse_file).grid(row=1, column=2, padx=5)
         self.get_model_btn = tk.Button(root, text="Get test model", command=self.download_test_model,
                                        bg="#f0ad4e", fg="black")
-        self.get_model_btn.grid(row=1, column=2, padx=5, sticky="e")
+        self.get_model_btn.grid(row=1, column=3, padx=5)
         root.grid_columnconfigure(1, weight=1)
 
         # ---------------- 2. Prompt file ----------------
@@ -180,13 +180,13 @@ class CpuLabBench:
         # ---------------- 3. Custom prompt ----------------
         tk.Label(root, text="Custom Prompt:").grid(row=3, column=0, sticky="nw", padx=10, pady=5)
         self.custom_prompt = tk.Text(root, height=3, width=75, font=("Arial", 9))
-        self.custom_prompt.grid(row=3, column=1, columnspan=2, padx=5, pady=5, sticky="ew")
+        self.custom_prompt.grid(row=3, column=1, columnspan=3, padx=5, pady=5, sticky="ew")
         self.custom_prompt.insert(
             "1.0", "Explain the difference between CPU and GPU inference in simple terms.")
 
         # ---------------- 4. Parameters ----------------
         param_frame = tk.Frame(root)
-        param_frame.grid(row=4, column=0, columnspan=3, sticky="w", padx=10)
+        param_frame.grid(row=4, column=0, columnspan=4, sticky="w", padx=10)
 
         tk.Label(param_frame, text="GPU Layers (-ngl):").pack(side="left")
         self.ngl = tk.IntVar(value=0)
@@ -214,7 +214,7 @@ class CpuLabBench:
                    width=6).pack(side="left", padx=5)
 
         cb_frame = tk.Frame(root)
-        cb_frame.grid(row=5, column=0, columnspan=3, sticky="w", padx=10)
+        cb_frame.grid(row=5, column=0, columnspan=4, sticky="w", padx=10)
         self.ctk_var, self.ctv_var, self.fa_var = tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
         tk.Checkbutton(cb_frame, text="Quantize K Cache (q8_0)", variable=self.ctk_var).pack(side="left", padx=5)
         tk.Checkbutton(cb_frame, text="Quantize V Cache (q8_0)", variable=self.ctv_var).pack(side="left", padx=5)
@@ -223,7 +223,7 @@ class CpuLabBench:
         # ---------------- 5. Stats panel ----------------
         info_frame = tk.LabelFrame(root, text=" Live Model Stats & Performance ",
                                    fg="#0a66c2", font=("Arial", 10, "bold"))
-        info_frame.grid(row=6, column=0, columnspan=3, sticky="ew", padx=10, pady=8)
+        info_frame.grid(row=6, column=0, columnspan=4, sticky="ew", padx=10, pady=8)
 
         self.stat_layers = tk.StringVar(value="Layers: -")
         self.stat_offload = tk.StringVar(value="Offload: -")
@@ -270,7 +270,7 @@ class CpuLabBench:
 
         # ---------------- 6. Buttons ----------------
         btn_frame = tk.Frame(root)
-        btn_frame.grid(row=7, column=0, columnspan=3, pady=5)
+        btn_frame.grid(row=7, column=0, columnspan=4, pady=5)
         self.run_btn = tk.Button(btn_frame, text="Run Inference",
                                  command=lambda: self.start_task("run"),
                                  bg="#28a745", fg="white", width=12)
@@ -287,14 +287,14 @@ class CpuLabBench:
         tk.Button(btn_frame, text="Clear All", command=self.clear_all, width=10).pack(side="left", padx=5)
 
         self.status_label = tk.Label(root, text="System: Monitoring... | PID: None", fg="grey")
-        self.status_label.grid(row=8, column=0, columnspan=3)
+        self.status_label.grid(row=8, column=0, columnspan=4)
 
         self.output_text = tk.Text(root, height=10, width=120, font=("Consolas", 9))
-        self.output_text.grid(row=9, column=0, columnspan=3, padx=10, pady=5)
+        self.output_text.grid(row=9, column=0, columnspan=4, padx=10, pady=5)
 
         # ---------------- 7. Paid-suite teaser ----------------
         teaser = tk.Frame(root)
-        teaser.grid(row=10, column=0, columnspan=3, sticky="ew", padx=10, pady=(2, 8))
+        teaser.grid(row=10, column=0, columnspan=4, sticky="ew", padx=10, pady=(2, 8))
         tk.Label(teaser, text="🔒 What can I run on this PC?",
                  font=("Arial", 9, "bold")).pack(side="left")
         tk.Button(teaser, text="Get model recommendations (CPU AI Lab suite)",
@@ -431,12 +431,17 @@ class CpuLabBench:
     # UI helpers (ported)
     # ---------------------------------------------------------------
     def browse_file(self):
-        fn = filedialog.askopenfilename(filetypes=[("GGUF files", "*.gguf")])
+        start_dir = str(MODELS_DIR) if MODELS_DIR.exists() else None
+        fn = filedialog.askopenfilename(
+            title="Select a GGUF model file",
+            initialdir=start_dir,
+            filetypes=[("GGUF files", "*.gguf"), ("All files", "*.*")])
         if fn:
             self.model_path.set(fn)
 
     def browse_prompt_file(self):
-        fn = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])
+        fn = filedialog.askopenfilename(title="Select a prompt file",
+                                        filetypes=[("Text files", "*.txt"), ("All files", "*.*")])
         if fn:
             self.prompt_file_path.set(fn)
             self.custom_prompt.delete("1.0", tk.END)

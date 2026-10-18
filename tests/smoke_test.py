@@ -32,10 +32,13 @@ def main():
     root.withdraw()
     app = cb.CpuLabBench(root)
 
-    # wait for async engine setup + Vulkan detection
-    for _ in range(60):
+    # wait for async engine setup AND the end of Vulkan detection (the engine
+    # status line is set before detection runs — must wait for gpu_status too)
+    for _ in range(120):
         root.update()
-        if app.cli_path is not None and app.engine_status.get().startswith("Engine: llama.cpp"):
+        if (app.cli_path is not None
+                and app.engine_status.get().startswith("Engine: llama.cpp")
+                and not app.gpu_status.get().startswith("GPU: detecting")):
             break
         time.sleep(0.25)
     root.update()
@@ -51,6 +54,47 @@ def main():
     model = Path(__file__).resolve().parent.parent / "models" / "Qwen3.5-0.8B-Q4_K_M.gguf"
     check("test model present", model.exists(), str(model))
     app.model_path.set(str(model))
+
+    print("== layout ==")
+
+    def walk(w):
+        for c in w.winfo_children():
+            yield c
+            yield from walk(c)
+
+    # v0.1.0 bug regression: "Get test model" was gridded into the SAME cell as
+    # the .gguf "Browse" picker and completely covered it. Two widgets must never
+    # share one grid cell (per container) unless intentionally stacked.
+    dups = []
+    for parent in [root] + list(walk(root)):
+        cells = {}
+        for ch in parent.winfo_children():
+            gi = ch.grid_info()
+            if not gi or "row" not in gi:
+                continue  # pack-managed, not applicable
+            cells.setdefault((gi["row"], gi["column"]), []).append(ch)
+        for key, kids in cells.items():
+            if len(kids) > 1:
+                desc = []
+                for k in kids:
+                    name = type(k).__name__
+                    try:
+                        name += "(" + str(k.cget("text")) + ")"
+                    except tk.TclError:
+                        pass
+                    desc.append(name)
+                dups.append(f"{type(parent).__name__}@{key}: {' + '.join(desc)}")
+    check("no two widgets share a grid cell", not dups, "; ".join(dups))
+
+    row1_btns = {}
+    for ch in root.winfo_children():
+        gi = ch.grid_info()
+        if gi.get("row") == 1 and isinstance(ch, tk.Button):
+            row1_btns[str(ch.cget("text"))] = gi["column"]
+    check("model 'Browse' picker visible in column 2",
+          row1_btns.get("Browse") == 2, str(row1_btns))
+    check("'Get test model' in column 3 (not stacked on Browse)",
+          row1_btns.get("Get test model") == 3, str(row1_btns))
 
     print("== command contract ==")
     run_cmd = app.build_cmd("run")
