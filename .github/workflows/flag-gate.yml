@@ -1,0 +1,17 @@
+name: flag-gate
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify-flags:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify app flag contract against pinned engine help snapshot
+        run: python tools/verify_flags.py --help-file docs/llama-cli-b11669-help.txt

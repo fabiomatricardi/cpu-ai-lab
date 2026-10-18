@@ -1,0 +1,5 @@
+# Runtime
+psutil>=5.9
+
+# Release build only
+pyinstaller>=6.0

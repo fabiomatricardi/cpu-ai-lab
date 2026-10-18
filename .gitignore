@@ -1,0 +1,16 @@
+# Local engine + models are provisioned at runtime, never committed
+engine/
+models/
+*.gguf
+*.zip
+
+# Build artifacts
+build/
+dist/
+*.spec
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
