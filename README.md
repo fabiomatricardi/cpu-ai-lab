@@ -5,6 +5,8 @@ Answers one question: *how fast can MY PC really run local AI?* — measured on 
 
 By **Fabio Matricardi — The Poor GPU Guy** · part of the **CPU AI Lab** line (*Bench → Run → Learn*).
 
+![flag gate](https://github.com/fabiomatricardi/cpu-ai-lab/actions/workflows/flag-gate.yml/badge.svg)
+
 ## Features
 
 - **Pinned engine** — on first run, downloads the exact llama.cpp build the app was tested against (**b11669**, win-x64 Vulkan zip), SHA256-verified. No "latest build" roulette.
