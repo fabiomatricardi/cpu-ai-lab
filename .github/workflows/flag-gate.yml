@@ -15,3 +15,5 @@ jobs:
           python-version: "3.12"
       - name: Verify app flag contract against pinned engine help snapshot
         run: python tools/verify_flags.py --help-file docs/llama-cli-b11669-help.txt
+      - name: Verify launcher flag contract (chrome flags + src/models.json presets + decision policy)
+        run: python tools/verify_flags.py --server --help-file docs/llama-server-b11669-help.txt

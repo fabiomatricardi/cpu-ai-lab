@@ -1,0 +1,93 @@
+{
+  "$comment": "CPU AI Lab preset list — SINGLE SOURCE consumed by launcher UI, flag gate (tools/verify_flags.py --server) and (post-launch) the recommender. Schema/rules: PRODUCT.md pillars 3-4. Decisions enforced by the gate: D27 (command-ready arrays, no duplicate flags), D30 (reasoning is emitted by the launcher control ONLY, never as --reasoning-effort, never inside presets), D31 (harness target Q6_K / block <=Q4_K_M / KV q4_0), D32 (MTP spec flags only on presets with mtp=in-gguf), D33 (agent_ok escape requires agent_reason), D34 (port 11434).",
+  "schema_version": 1,
+  "defaults": {
+    "host": "127.0.0.1",
+    "port": 11434,
+    "ctx": 32768,
+    "threads": null,
+    "ngl": 99,
+    "fa": "on",
+    "lv": 4,
+    "kv_quant": "q4_0",
+    "reasoning_default": "medium",
+    "harness": {
+      "preferred_quant": "Q6_K",
+      "blocked_at_or_below": "Q4_K_M",
+      "kv_quant": "q4_0"
+    }
+  },
+  "presets": [
+    {
+      "id": "qwen35-4b-mtp-q6k",
+      "name": "Qwen3.5-4B-OnlyText-MTP-Q6_K",
+      "quant": "Q6_K",
+      "size_gb": null,
+      "min_ram_gb": null,
+      "download_url": null,
+      "tool_calling": true,
+      "agent_ok": false,
+      "agent_reason": null,
+      "reasoning_default": "medium",
+      "alias": "qwenMTP",
+      "mtp": "in-gguf",
+      "flags": [
+        "-c", "64000",
+        "-ctk", "q4_0",
+        "-ctv", "q4_0",
+        "--temperature", "1.0",
+        "--top-p", "0.95",
+        "--top-k", "-1",
+        "--repeat-penalty", "1",
+        "--presence-penalty", "0",
+        "--frequency-penalty", "0",
+        "--spec-type", "draft-mtp",
+        "--spec-draft-n-max", "1"
+      ],
+      "notes": "MTP heads inside the GGUF — no external draft file (D32); the only MTP preset for now. --spec-draft-n-max value is a SEED GUESS (original command paste was truncated) — CONFIRM with Fabio before launcher 2.2. KV q4_0/q4_0 proven in his command."
+    },
+    {
+      "id": "bonsai2-9b-q8",
+      "name": "Ternary-Bonsai-2-9B-PQ2_0-MTP-Q8_0",
+      "quant": "Q8_0",
+      "size_gb": null,
+      "min_ram_gb": null,
+      "download_url": null,
+      "tool_calling": null,
+      "agent_ok": false,
+      "agent_reason": null,
+      "reasoning_default": "medium",
+      "alias": "bonsai2-9b",
+      "mtp": "none",
+      "flags": [
+        "-c", "65000",
+        "--cache-type-k", "q8_0",
+        "--cache-type-v", "q8_0",
+        "--temperature", "1.0",
+        "--top-p", "0.95",
+        "--top-k", "20",
+        "--min-p", "0",
+        "--presence-penalty", "1.0",
+        "--repeat-penalty", "1.0",
+        "--repeat-last-n", "64"
+      ],
+      "notes": "Runs on UPSTREAM b11669 WITHOUT MTP draft flags (D32 — his MTP experience with this model was on the PrismML fork). Cleaned from Fabio's proven command: removed duplicate --port and the second -c 16384 (last-wins -c 65000 kept), reasoning-effort replaced by the launcher's --reasoning-budget control (D30). KV q8_0/q8_0 as proven."
+    },
+    {
+      "id": "mellum2-q3ks",
+      "name": "Mellum2 Instruct Q3_K_S",
+      "quant": "Q3_K_S",
+      "size_gb": null,
+      "min_ram_gb": null,
+      "download_url": null,
+      "tool_calling": true,
+      "agent_ok": true,
+      "agent_reason": "Harness escape (D33): insufficient iGPU capacity — Q3_K_S was the only runnable option on this class of machine; RLVR tool-use training mitigates most of the quantization penalty",
+      "reasoning_default": "none",
+      "alias": null,
+      "mtp": "none",
+      "flags": [],
+      "notes": "flags TBD — Fabio supplies them at item 2.3. Present from day one so the D33 escape-hatch path is exercised by the gate."
+    }
+  ]
+}
