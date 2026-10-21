@@ -141,16 +141,15 @@ def harness_status(preset: dict, defaults: dict) -> dict:
     kv = str(harness.get("kv_quant", "q4_0"))
     floor = quant_rank(blocked_below)           # Q4_K_M -> 4
 
-    if preset.get("agent_ok"):                  # D33 escape hatch (reason required)
-        return {"eligible": True, "escape": True, "rank": quant_rank(preset.get("quant", "")),
-                "target": target, "kv": kv,
-                "reason": str(preset.get("agent_reason") or "escape hatch (agent_ok)")}
     rank = quant_rank(preset.get("quant", ""))
     if rank >= 5:
         on_target = preset.get("quant", "").upper() == target.upper()
         hint = "" if on_target else " (usable, target is Q6_K)"
         return {"eligible": True, "escape": False, "rank": rank, "target": target, "kv": kv,
                 "reason": ("on target " + target) if on_target else ("eligible" + hint)}
+    if preset.get("agent_ok"):              # D33 escape hatch: only matters BELOW the floor
+        return {"eligible": True, "escape": True, "rank": rank, "target": target, "kv": kv,
+                "reason": str(preset.get("agent_reason") or "escape hatch (agent_ok)")}
     return {"eligible": False, "escape": False, "rank": rank, "target": target, "kv": kv,
             "reason": (f"{preset.get('quant', '?')} is at/below {blocked_below}: structured output "
                        f"breaks down -> chat-only. Harness target {target} + KV -ctk/-ctv {kv} (D31)")}
@@ -310,6 +309,18 @@ def download_file(url: str, dest: Path, progress=None) -> Path:
                 progress(done, total)
     part.replace(dest)
     return dest
+
+
+def _download_filename(preset: dict, url: str | None = None) -> str:
+    """Local filename for a preset: the URL's file part is authoritative
+    (it IS the file on HF); fall back to name + .gguf."""
+    url = url or preset.get("download_url")
+    if url:
+        fname = str(url).split("?", 1)[0].rstrip("/").rsplit("/", 1)[-1]
+        if fname.endswith(".gguf"):
+            return fname
+    name = str(preset.get("name") or preset.get("id") or "model")
+    return name if name.endswith(".gguf") else name + ".gguf"
 
 
 # ---------------------------------------------------------------------------
@@ -653,9 +664,9 @@ class CpuLabLauncher:
                 )
             elif self.mode_var.get() == "chat":
                 self.harness_note.configure(text="")
-            # model path suggestion: preset filename if the entry is untouched
+            # model path suggestion: local file matching the URL name (or preset name)
             if not self.model_var.get():
-                guess = MODELS_DIR / str(preset.get("name") or "")
+                guess = MODELS_DIR / _download_filename(preset)
                 if guess.exists():
                     self.model_var.set(str(guess))
         else:
@@ -703,7 +714,7 @@ class CpuLabLauncher:
         if not url:
             messagebox.showinfo(APP_NAME, "No download URL for this preset yet (D24 pending).")
             return
-        dest = MODELS_DIR / str(preset.get("name") or "model.gguf")
+        dest = MODELS_DIR / _download_filename(preset)
         if dest.exists():
             if not messagebox.askyesno(APP_NAME, f"{dest.name} already exists. Re-download?"):
                 return

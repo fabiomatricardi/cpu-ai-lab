@@ -35,7 +35,13 @@ def main():
     check("models.json loads", err is None, str(err))
     presets = data.get("presets", [])
     defaults = data.get("defaults", {})
-    check("7 curated presets", len(presets) == 7, f"got {len(presets)}")
+    check("8 curated presets", len(presets) == 8, f"got {len(presets)}")
+    with_url = [p["id"] for p in presets if p.get("download_url")]
+    check("every preset has a download_url (D24)", len(with_url) == len(presets),
+          f"missing: {sorted(set(p['id'] for p in presets) - set(with_url))}")
+    missing_reason = [p["id"] for p in presets
+                      if p.get("agent_ok") and not p.get("agent_reason")]
+    check("agent_ok always carries agent_reason (D33)", not missing_reason, str(missing_reason))
 
     # --- composition: every preset x both modes ---------------------------
     eligible_ids, blocked_ids = [], []
@@ -75,10 +81,11 @@ def main():
             check(f"{tag}: preset flags preserved", ok)
 
     # dedupe/uniqueness of the harness-eligibility split
-    check("harness eligible = 5 Q6/Q8 presets",
+    check("harness eligible = Q6/Q8 presets (6 now)",
           sorted(set(eligible_ids)) == sorted(
               ["granite-4.2-3b-q6k", "spark-x2.5-4b-q6k", "qwen35-4b-mtp-q6k",
-               "spark-x2.6-4b-q8", "lfm2.5-1.2b-q6k"]), str(sorted(set(eligible_ids))))
+               "spark-x2.6-4b-q8", "lfm2.5-1.2b-q6k", "MiniCPM5-1B-q8"]),
+          str(sorted(set(eligible_ids))))
     check("chat-only = 2 Q2_0 ternaries",
           sorted(set(blocked_ids)) == sorted(["bonsai-4b-q2", "bonsai-2b-q2"]),
           str(sorted(set(blocked_ids))))
@@ -149,7 +156,7 @@ def main():
             root = tk.Tk()
             root.withdraw()
             app = L.CpuLabLauncher(root)
-            check("UI: 7 presets in tree", len(app.tree.get_children()) == 7)
+            check("UI: 8 presets in tree", len(app.tree.get_children()) == 8)
             app.mode_var.set("harness")
             app._on_mode_change()
             blocked = [iid for iid in app.tree.get_children()
