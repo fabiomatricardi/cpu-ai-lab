@@ -171,6 +171,18 @@ def server_gate(help_text: str, do_dump: bool) -> int:
         else:
             print(f"  [OK  ] harness policy: preferred Q6_K | blocked <= Q4_K_M | KV {harness.get('kv_quant')} (D31)")
 
+        # D38 — harness capability policy (reasoning + scale)
+        min_params = harness.get("min_params_b")
+        require_reasoning = harness.get("require_reasoning")
+        if not isinstance(min_params, (int, float)) or isinstance(min_params, bool) or min_params <= 0 \
+                or not isinstance(require_reasoning, bool):
+            failures.append("harness capability policy missing/invalid (D38)")
+            print(f"  [FAIL] harness capability = min_params_b={min_params!r}, "
+                  f"require_reasoning={require_reasoning!r} (D38: number >= 1 + bool)")
+        else:
+            print(f"  [OK  ] harness capability: reasoning required={require_reasoning} | "
+                  f"min scale {min_params}B (D38)")
+
         if not presets:
             failures.append("presets list is empty")
         seen_ids = set()
@@ -197,8 +209,14 @@ def server_gate(help_text: str, do_dump: bool) -> int:
                 problems.append(f"spec flags on non-MTP preset (D32): {', '.join(scoped)}")
             if p.get("agent_ok") and not p.get("agent_reason"):
                 problems.append("agent_ok without agent_reason (D33)")
+            if not isinstance(p.get("params_b"), (int, float)) or isinstance(p.get("params_b"), bool) \
+                    or p.get("params_b") <= 0:
+                problems.append("params_b missing/invalid (D38)")
+            if not isinstance(p.get("reasoning_capable"), bool):
+                problems.append("reasoning_capable missing - must be true/false (D38)")
 
-            meta = f"flags={len(flags):>2} | quant={p.get('quant')} | mtp={p.get('mtp')}"
+            meta = (f"flags={len(flags):>2} | quant={p.get('quant')} | mtp={p.get('mtp')} | "
+                    f"{p.get('params_b', '?')}B | reasoning={'y' if p.get('reasoning_capable') else 'n'}")
             print(f"  [{'OK  ' if not problems else 'FAIL'}] {pid:<24} {meta}")
             for pb in problems:
                 print(f"          -> {pb}")

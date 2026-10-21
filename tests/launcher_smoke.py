@@ -80,19 +80,42 @@ def main():
                 for i in range(0, len(pf) - 1, 2))
             check(f"{tag}: preset flags preserved", ok)
 
+    # --- D38: capability facts present on every preset --------------------
+    for p in presets:
+        check(f"{p['id']}: params_b present (D38)",
+              isinstance(p.get("params_b"), (int, float)) and not isinstance(p.get("params_b"), bool)
+              and p["params_b"] > 0)
+        check(f"{p['id']}: reasoning_capable bool (D38)", isinstance(p.get("reasoning_capable"), bool))
+    check("harness policy: min_params_b + require_reasoning (D38)",
+          isinstance(defaults.get("harness", {}).get("min_params_b"), (int, float))
+          and isinstance(defaults.get("harness", {}).get("require_reasoning"), bool))
+
     # dedupe/uniqueness of the harness-eligibility split
-    check("harness eligible = Q6/Q8 presets (6 now)",
+    check("harness eligible = proven 3-4B reasoning models (D31+D38: 4)",
           sorted(set(eligible_ids)) == sorted(
               ["granite-4.2-3b-q6k", "spark-x2.5-4b-q6k", "qwen35-4b-mtp-q6k",
-               "spark-x2.6-4b-q8", "lfm2.5-1.2b-q6k", "MiniCPM5-1B-q8"]),
+               "spark-x2.6-4b-q8"]),
           str(sorted(set(eligible_ids))))
-    check("chat-only = 2 Q2_0 ternaries",
-          sorted(set(blocked_ids)) == sorted(["bonsai-4b-q2", "bonsai-2b-q2"]),
+    check("harness blocked = 2 ternaries + LFM (no reasoning) + MiniCPM (1B)",
+          sorted(set(blocked_ids)) == sorted(
+              ["bonsai-4b-q2", "bonsai-2b-q2", "lfm2.5-1.2b-q6k", "MiniCPM5-1B-q8"]),
           str(sorted(set(blocked_ids))))
     for p in presets:
         st = L.harness_status(p, defaults)
         if not st["eligible"]:
-            check(f"{p['id']}: block reason mentions Q6_K remedy", "Q6_K" in st["reason"])
+            reason = st["reason"]
+            if p["id"] in ("bonsai-4b-q2", "bonsai-2b-q2"):
+                check(f"{p['id']}: quant block reason mentions Q6_K remedy", "Q6_K" in reason)
+            if p["id"] == "lfm2.5-1.2b-q6k":
+                check(f"{p['id']}: reasoning block (D38)",
+                      "no reasoning capability" in reason and "D38" in reason)
+                check(f"{p['id']}: also scale block (1.2 < 3)", "1.2B below harness scale floor" in reason)
+            if p["id"] == "MiniCPM5-1B-q8":
+                check(f"{p['id']}: scale block (D38)",
+                      "1B below harness scale floor" in reason and "D38" in reason)
+            if p["id"] == "bonsai-2b-q2":
+                check(f"{p['id']}: joined reasons (quant AND scale)",
+                      "Q6_K" in reason and "2B below" in reason)
 
     # --- MTP scope (D32) --------------------------------------------------
     for p in presets:
@@ -161,11 +184,12 @@ def main():
             app._on_mode_change()
             blocked = [iid for iid in app.tree.get_children()
                        if "blocked" in app.tree.item(iid, "tags")]
-            check("UI: harness mode greys 2 presets", len(blocked) == 2, str(blocked))
+            check("UI: harness mode greys 4 presets (2 quant + LFM + MiniCPM)",
+                  len(blocked) == 4, str(blocked))
             check("UI: selected preset is harness-eligible", app._eligible_current())
             app.mode_var.set("chat")
             app._on_mode_change()
-            check("UI: chat mode unblocks all", len(blocked) == 2 and app._eligible_current() is not None)
+            check("UI: chat mode unblocks all", len(blocked) == 4 and app._eligible_current() is not None)
             app.reasoning_var.set("xhigh")
             app.refresh()
             check("UI: command preview has budget 8192",

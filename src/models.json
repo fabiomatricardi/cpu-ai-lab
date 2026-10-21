@@ -1,5 +1,5 @@
 {
-  "$comment": "CPU AI Lab preset list - SINGLE SOURCE consumed by launcher UI, flag gate (tools/verify_flags.py --server) and (post-launch) the recommender. Schema/rules: PRODUCT.md pillars 3-4. Decisions enforced by the gate: D27 (command-ready arrays, no duplicate flags), D30 (reasoning emitted by launcher control ONLY as --reasoning-budget; presets carry reasoning_default only), D31 (harness target Q6_K / block <=Q4_K_M / KV q4_0), D32 (MTP spec flags only on presets with mtp=in-gguf), D33 (agent_ok escape requires agent_reason), D34 (port 11434). Transcribed 2026-10-21 from Fabio's proven commands (D36); chrome stripped: -m -np -t -ngl -lv -fa --port --jinja --host --ui --ui-mcp-proxy -a --reasoning-budget.",
+  "$comment": "CPU AI Lab preset list - SINGLE SOURCE consumed by launcher UI, flag gate (tools/verify_flags.py --server) and (post-launch) the recommender. Schema/rules: PRODUCT.md pillars 3-4. Decisions enforced by the gate: D27 (command-ready arrays, no duplicate flags), D30 (reasoning emitted by launcher control ONLY as --reasoning-budget; presets carry reasoning_default only), D31 (harness target Q6_K / block <=Q4_K_M / KV q4_0), D32 (MTP spec flags only on presets with mtp=in-gguf), D33 (agent_ok escape requires agent_reason), D34 (port 11434), D38 (harness needs reasoning_capable + params_b >= min_params_b). Transcribed 2026-10-21 from Fabio's proven commands (D36); chrome stripped: -m -np -t -ngl -lv -fa --port --jinja --host --ui --ui-mcp-proxy -a --reasoning-budget.",
   "schema_version": 1,
   "defaults": {
     "host": "127.0.0.1",
@@ -14,7 +14,9 @@
     "harness": {
       "preferred_quant": "Q6_K",
       "blocked_at_or_below": "Q4_K_M",
-      "kv_quant": "q4_0"
+      "kv_quant": "q4_0",
+      "min_params_b": 3,
+      "require_reasoning": true
     }
   },
   "presets": [
@@ -22,6 +24,7 @@
       "id": "granite-4.2-3b-q6k",
       "name": "granite-4.2-3b-Q6_K",
       "quant": "Q6_K",
+      "params_b": 3,
       "size_gb": 3.01,
       "min_ram_gb": null,
       "download_url": "https://huggingface.co/ibm-granite/granite-4.2-3b-GGUF/resolve/main/granite-4.2-3b-Q6_K.gguf",
@@ -29,6 +32,7 @@
       "agent_ok": true,
       "agent_reason": "Proven with OpenCode in the Weekend Toolkit agent setup - his proven harness model.",
       "reasoning_default": "medium",
+      "reasoning_capable": true,
       "alias": "granite",
       "mtp": "none",
       "flags": [
@@ -44,6 +48,7 @@
       "id": "spark-x2.5-4b-q6k",
       "name": "Spark-X2.5-4B.Q6_K",
       "quant": "Q6_K",
+      "params_b": 4,
       "size_gb": 3.38,
       "min_ram_gb": null,
       "download_url": "https://huggingface.co/mradermacher/Spark-X2.5-4B-GGUF/resolve/main/Spark-X2.5-4B.Q6_K.gguf",
@@ -51,6 +56,7 @@
       "agent_ok": true,
       "agent_reason": "Proven with OpenCode in the Spark coding launcher - his proven harness model.",
       "reasoning_default": "medium",
+      "reasoning_capable": true,
       "alias": "sparkx2.5",
       "mtp": "none",
       "flags": [
@@ -70,6 +76,7 @@
       "id": "qwen35-4b-mtp-q6k",
       "name": "Qwen3.5-4B-OnlyText-MTP-Q6_K",
       "quant": "Q6_K",
+      "params_b": 4,
       "size_gb": 3.56,
       "min_ram_gb": null,
       "download_url": "https://huggingface.co/OnlyTextLLMs/Qwen3.5-4B-OnlyText-GGUF/resolve/main/Qwen3.5-4B-OnlyText-MTP-Q6_K.gguf",
@@ -77,6 +84,7 @@
       "agent_ok": true,
       "agent_reason": "Proven with OpenCode - Fabio's main agent preset (in-GGUF MTP + tool calling).",
       "reasoning_default": "medium",
+      "reasoning_capable": true,
       "alias": "qwenMTP",
       "mtp": "in-gguf",
       "flags": [
@@ -98,6 +106,7 @@
       "id": "bonsai-4b-q2",
       "name": "Ternary-Bonsai-2-4B-Q2_0",
       "quant": "Q2_0",
+      "params_b": 4,
       "size_gb": 1.21,
       "min_ram_gb": null,
       "download_url": "https://huggingface.co/prism-ml/Ternary-Bonsai-2-4B-gguf/resolve/main/Ternary-Bonsai-2-4B-Q2_0.gguf",
@@ -105,6 +114,7 @@
       "agent_ok": false,
       "agent_reason": null,
       "reasoning_default": "medium",
+      "reasoning_capable": true,
       "alias": "bonsai-4b",
       "mtp": "none",
       "flags": [
@@ -125,6 +135,7 @@
       "id": "bonsai-2b-q2",
       "name": "Ternary-Bonsai-2-2B-Q2_0",
       "quant": "Q2_0",
+      "params_b": 2,
       "size_gb": 0.55,
       "min_ram_gb": null,
       "download_url": "https://huggingface.co/prism-ml/Ternary-Bonsai-2-2B-gguf/resolve/main/Ternary-Bonsai-2-2B-Q2_0.gguf",
@@ -132,6 +143,7 @@
       "agent_ok": false,
       "agent_reason": null,
       "reasoning_default": "medium",
+      "reasoning_capable": true,
       "alias": "bonsai-2b",
       "mtp": "none",
       "flags": [
@@ -152,6 +164,7 @@
       "id": "spark-x2.6-4b-q8",
       "name": "Spark-X2.6-4B-Q8_0",
       "quant": "Q8_0",
+      "params_b": 4,
       "size_gb": 4.38,
       "min_ram_gb": null,
       "download_url": "https://huggingface.co/XHToken/Spark-X2.6-4B-GGUF/resolve/main/Spark-X2.6-4B-Q8_0.gguf",
@@ -159,6 +172,7 @@
       "agent_ok": false,
       "agent_reason": null,
       "reasoning_default": "medium",
+      "reasoning_capable": true,
       "alias": "sparkx2.6",
       "mtp": "none",
       "flags": [
@@ -178,6 +192,7 @@
       "id": "lfm2.5-1.2b-q6k",
       "name": "LFM2.5-1.2B-Instruct-Q6_K",
       "quant": "Q6_K",
+      "params_b": 1.2,
       "size_gb": 0.96,
       "min_ram_gb": null,
       "download_url": "https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct-GGUF/resolve/main/LFM2.5-1.2B-Instruct-Q6_K.gguf",
@@ -185,6 +200,7 @@
       "agent_ok": false,
       "agent_reason": null,
       "reasoning_default": "none",
+      "reasoning_capable": false,
       "alias": "lfm2.5-1.2b",
       "mtp": "none",
       "flags": [
@@ -204,6 +220,7 @@
       "id": "MiniCPM5-1B-q8",
       "name": "MiniCPM5-1B-Q8_0",
       "quant": "Q8_0",
+      "params_b": 1,
       "size_gb": 1.15,
       "min_ram_gb": null,
       "download_url": "https://huggingface.co/openbmb/MiniCPM5-1B-GGUF/resolve/main/MiniCPM5-1B-Q8_0.gguf",
@@ -211,6 +228,7 @@
       "agent_ok": false,
       "agent_reason": null,
       "reasoning_default": "medium",
+      "reasoning_capable": true,
       "alias": "MiniCPM5-1B",
       "mtp": "none",
       "flags": [

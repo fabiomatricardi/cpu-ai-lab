@@ -133,26 +133,46 @@ def quant_rank(quant: str) -> int:
 
 
 def harness_status(preset: dict, defaults: dict) -> dict:
-    """eligible? + human reason. Uses defaults.harness policy (D31) verbatim -
-    preferred Q6_K, blocked at/below Q4_K_M, KV remedy q4_0."""
+    """eligible? + human reason. THREE independent gates:
+      D31 quant   - target Q6_K, blocked at/below Q4_K_M, KV remedy q4_0
+      D38 reasoning - require_reasoning => reasoning_capable must be true
+      D38 scale   - params_b >= harness.min_params_b (fail-closed: unknown = blocked)
+    agent_ok + agent_reason (D33) escapes ANY of the three, with reason."""
     harness = defaults.get("harness", {})
     blocked_below = str(harness.get("blocked_at_or_below", "Q4_K_M"))
     target = str(harness.get("preferred_quant", "Q6_K"))
     kv = str(harness.get("kv_quant", "q4_0"))
+    min_params = float(harness.get("min_params_b") or 3)
+    require_reasoning = harness.get("require_reasoning", True) is not False
     floor = quant_rank(blocked_below)           # Q4_K_M -> 4
 
     rank = quant_rank(preset.get("quant", ""))
-    if rank >= 5:
+    reasons = []
+    if rank <= floor:
+        reasons.append(
+            f"{preset.get('quant', '?')} is at/below {blocked_below}: structured output "
+            f"breaks down -> chat-only. Harness target {target} + KV -ctk/-ctv {kv} (D31)")
+    if require_reasoning and preset.get("reasoning_capable") is not True:
+        reasons.append("no reasoning capability -> can't hold multi-step harness work; "
+                       "web-search/chat model (D38)")
+    params = preset.get("params_b")
+    if not isinstance(params, (int, float)) or isinstance(params, bool) or float(params) < min_params:
+        shown = f"{params}B" if isinstance(params, (int, float)) and not isinstance(params, bool) \
+            else "unknown scale"
+        reasons.append(f"{shown} below harness scale floor {min_params:g}B -> too small for "
+                       f"reliable harness work (D38)")
+
+    if not reasons:
         on_target = preset.get("quant", "").upper() == target.upper()
         hint = "" if on_target else " (usable, target is Q6_K)"
         return {"eligible": True, "escape": False, "rank": rank, "target": target, "kv": kv,
                 "reason": ("on target " + target) if on_target else ("eligible" + hint)}
-    if preset.get("agent_ok"):              # D33 escape hatch: only matters BELOW the floor
+    if preset.get("agent_ok"):              # D33 escape: written reason beats any single gate
         return {"eligible": True, "escape": True, "rank": rank, "target": target, "kv": kv,
-                "reason": str(preset.get("agent_reason") or "escape hatch (agent_ok)")}
+                "reason": (str(preset.get("agent_reason") or "escape hatch (agent_ok)")
+                           + " — despite: " + "; ".join(reasons))}
     return {"eligible": False, "escape": False, "rank": rank, "target": target, "kv": kv,
-            "reason": (f"{preset.get('quant', '?')} is at/below {blocked_below}: structured output "
-                       f"breaks down -> chat-only. Harness target {target} + KV -ctk/-ctv {kv} (D31)")}
+            "reason": " | ".join(reasons)}
 
 
 # ---------------------------------------------------------------------------
