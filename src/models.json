@@ -1,5 +1,5 @@
 {
-  "$comment": "CPU AI Lab preset list — SINGLE SOURCE consumed by launcher UI, flag gate (tools/verify_flags.py --server) and (post-launch) the recommender. Schema/rules: PRODUCT.md pillars 3-4. Decisions enforced by the gate: D27 (command-ready arrays, no duplicate flags), D30 (reasoning is emitted by the launcher control ONLY, never as --reasoning-effort, never inside presets), D31 (harness target Q6_K / block <=Q4_K_M / KV q4_0), D32 (MTP spec flags only on presets with mtp=in-gguf), D33 (agent_ok escape requires agent_reason), D34 (port 11434).",
+  "$comment": "CPU AI Lab preset list - SINGLE SOURCE consumed by launcher UI, flag gate (tools/verify_flags.py --server) and (post-launch) the recommender. Schema/rules: PRODUCT.md pillars 3-4. Decisions enforced by the gate: D27 (command-ready arrays, no duplicate flags), D30 (reasoning emitted by launcher control ONLY as --reasoning-budget; presets carry reasoning_default only), D31 (harness target Q6_K / block <=Q4_K_M / KV q4_0), D32 (MTP spec flags only on presets with mtp=in-gguf), D33 (agent_ok escape requires agent_reason), D34 (port 11434). Transcribed 2026-10-21 from Fabio's proven commands (D36); chrome stripped: -m -np -t -ngl -lv -fa --port --jinja --host --ui --ui-mcp-proxy -a --reasoning-budget.",
   "schema_version": 1,
   "defaults": {
     "host": "127.0.0.1",
@@ -18,6 +18,54 @@
     }
   },
   "presets": [
+    {
+      "id": "granite-4.2-3b-q6k",
+      "name": "Granite-4.2-3B-Q6_K",
+      "quant": "Q6_K",
+      "size_gb": null,
+      "min_ram_gb": null,
+      "download_url": null,
+      "tool_calling": true,
+      "agent_ok": false,
+      "agent_reason": null,
+      "reasoning_default": "medium",
+      "alias": "granite",
+      "mtp": "none",
+      "flags": [
+        "-c", "128000",
+        "-ctk", "q4_0",
+        "-ctv", "q4_0",
+        "--temperature", "1.0",
+        "--top-p", "0.95"
+      ],
+      "notes": "IBM Granite 4.2 (Weekend Toolkit model). Minimal sampling - no top-k/repeat set (engine defaults). Largest context of the list: 128000. Harness-eligible (Q6_K)."
+    },
+    {
+      "id": "spark-x2.5-4b-q6k",
+      "name": "Spark-X2.5-4B-Q6_K",
+      "quant": "Q6_K",
+      "size_gb": null,
+      "min_ram_gb": null,
+      "download_url": null,
+      "tool_calling": true,
+      "agent_ok": false,
+      "agent_reason": null,
+      "reasoning_default": "medium",
+      "alias": "sparkx2.5",
+      "mtp": "none",
+      "flags": [
+        "-c", "64000",
+        "-ctk", "q4_0",
+        "-ctv", "q4_0",
+        "--temperature", "1.0",
+        "--top-p", "0.95",
+        "--top-k", "-1",
+        "--repeat-penalty", "1",
+        "--presence-penalty", "0",
+        "--frequency-penalty", "0"
+      ],
+      "notes": "Weekend Toolkit coding model. Full sampling set (top-k unlimited, penalties neutral). Harness-eligible (Q6_K)."
+    },
     {
       "id": "qwen35-4b-mtp-q6k",
       "name": "Qwen3.5-4B-OnlyText-MTP-Q6_K",
@@ -42,28 +90,28 @@
         "--presence-penalty", "0",
         "--frequency-penalty", "0",
         "--spec-type", "draft-mtp",
-        "--spec-draft-n-max", "1"
+        "--spec-draft-n-max", "2"
       ],
-      "notes": "MTP heads inside the GGUF — no external draft file (D32); the only MTP preset for now. --spec-draft-n-max value is a SEED GUESS (original command paste was truncated) — CONFIRM with Fabio before launcher 2.2. KV q4_0/q4_0 proven in his command."
+      "notes": "MTP heads inside the GGUF - no external draft file (D32); the only MTP preset. --spec-draft-n-max confirmed = 2 (2026-10-21). Harness-eligible (Q6_K)."
     },
     {
-      "id": "bonsai2-9b-q8",
-      "name": "Ternary-Bonsai-2-9B-PQ2_0-MTP-Q8_0",
-      "quant": "Q8_0",
-      "size_gb": null,
+      "id": "bonsai-4b-q2",
+      "name": "Ternary-Bonsai-2-4B-Q2_0",
+      "quant": "Q2_0",
+      "size_gb": 1.21,
       "min_ram_gb": null,
       "download_url": null,
       "tool_calling": null,
       "agent_ok": false,
       "agent_reason": null,
       "reasoning_default": "medium",
-      "alias": "bonsai2-9b",
+      "alias": "bonsai-4b",
       "mtp": "none",
       "flags": [
-        "-c", "65000",
-        "--cache-type-k", "q8_0",
-        "--cache-type-v", "q8_0",
-        "--temperature", "1.0",
+        "-c", "64000",
+        "-ctk", "q4_0",
+        "-ctv", "q4_0",
+        "--temp", "1.0",
         "--top-p", "0.95",
         "--top-k", "20",
         "--min-p", "0",
@@ -71,23 +119,86 @@
         "--repeat-penalty", "1.0",
         "--repeat-last-n", "64"
       ],
-      "notes": "Runs on UPSTREAM b11669 WITHOUT MTP draft flags (D32 — his MTP experience with this model was on the PrismML fork). Cleaned from Fabio's proven command: removed duplicate --port and the second -c 16384 (last-wins -c 65000 kept), reasoning-effort replaced by the launcher's --reasoning-budget control (D30). KV q8_0/q8_0 as proven."
+      "notes": "CHAT-ONLY: Q2_0 is below the harness floor (D31) - greyed out in Harness mode. size from local file (Ternary-Bonsai-2-4B-Q2_0.gguf, 1,212,103,520 B). Duplicate --port removed (D27)."
     },
     {
-      "id": "mellum2-q3ks",
-      "name": "Mellum2 Instruct Q3_K_S",
-      "quant": "Q3_K_S",
+      "id": "bonsai-2b-q2",
+      "name": "Ternary-Bonsai-2-2B-Q2_0",
+      "quant": "Q2_0",
+      "size_gb": 0.55,
+      "min_ram_gb": null,
+      "download_url": null,
+      "tool_calling": null,
+      "agent_ok": false,
+      "agent_reason": null,
+      "reasoning_default": "medium",
+      "alias": "bonsai-2b",
+      "mtp": "none",
+      "flags": [
+        "-c", "64000",
+        "-ctk", "q4_0",
+        "-ctv", "q4_0",
+        "--temp", "1.0",
+        "--top-p", "0.95",
+        "--top-k", "20",
+        "--min-p", "0",
+        "--presence-penalty", "1.0",
+        "--repeat-penalty", "1.0",
+        "--repeat-last-n", "64"
+      ],
+      "notes": "CHAT-ONLY: Q2_0 below harness floor (D31). Alias fixed to bonsai-2b (source command had bonsai-4b, copy-paste artifact). size from local file (546,689,504 B). Duplicate --port removed (D27)."
+    },
+    {
+      "id": "spark-x2.6-4b-q8",
+      "name": "Spark-X2.6-4B-Q8_0",
+      "quant": "Q8_0",
       "size_gb": null,
       "min_ram_gb": null,
       "download_url": null,
       "tool_calling": true,
-      "agent_ok": true,
-      "agent_reason": "Harness escape (D33): insufficient iGPU capacity — Q3_K_S was the only runnable option on this class of machine; RLVR tool-use training mitigates most of the quantization penalty",
-      "reasoning_default": "none",
-      "alias": null,
+      "agent_ok": false,
+      "agent_reason": null,
+      "reasoning_default": "medium",
+      "alias": "sparkx2.6",
       "mtp": "none",
-      "flags": [],
-      "notes": "flags TBD — Fabio supplies them at item 2.3. Present from day one so the D33 escape-hatch path is exercised by the gate."
+      "flags": [
+        "-c", "64000",
+        "-ctk", "q4_0",
+        "-ctv", "q4_0",
+        "--temperature", "1.0",
+        "--top-p", "0.95",
+        "--top-k", "-1",
+        "--repeat-penalty", "1",
+        "--presence-penalty", "0",
+        "--frequency-penalty", "0"
+      ],
+      "notes": "Highest-precision preset of the list (Q8_0) - top harness pick when RAM allows. Full sampling set."
+    },
+    {
+      "id": "lfm2.5-1.2b-q6k",
+      "name": "LFM2.5-1.2B-Instruct-Q6_K",
+      "quant": "Q6_K",
+      "size_gb": null,
+      "min_ram_gb": null,
+      "download_url": null,
+      "tool_calling": true,
+      "agent_ok": false,
+      "agent_reason": null,
+      "reasoning_default": "none",
+      "alias": "lfm2.5-1.2b",
+      "mtp": "none",
+      "flags": [
+        "-c", "64000",
+        "-ctk", "q4_0",
+        "-ctv", "q4_0",
+        "-lm", "mmap",
+        "-b", "2048",
+        "-ub", "2048",
+        "--temp", "0.1",
+        "--top-k", "50",
+        "--repeat-penalty", "1.05"
+      ],
+      "notes": "THE web-search-ready preset (Medium article + llamaCPP-server_webUI-Exa repo): tested with Exa MCP, tight batch (b/ub 2048), deterministic sampling (temp 0.1), no thinking (budget 0). --ui-mcp-proxy stripped from flags: chrome emits it always (D12/D13). Harness-eligible (Q6_K)."
     }
   ]
 }
