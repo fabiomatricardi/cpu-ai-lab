@@ -17,3 +17,7 @@ jobs:
         run: python tools/verify_flags.py --help-file docs/llama-cli-b11669-help.txt
       - name: Verify launcher flag contract (chrome flags + src/models.json presets + decision policy)
         run: python tools/verify_flags.py --server --help-file docs/llama-server-b11669-help.txt
+      - name: Launcher smoke (composer, D30/D31/D32/D34 policy, OpenCode export math)
+        env:
+          CPULAB_SKIP_UI: "1"
+        run: python tests/launcher_smoke.py
