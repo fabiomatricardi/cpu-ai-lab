@@ -92,11 +92,13 @@ def find_server() -> Path | None:
 
 
 def find_models_json() -> Path | None:
-    """Locate the preset list (single source: src/models.json)."""
+    """Locate the preset list (single source: src/models.json).
+    Frozen exe: a models.json next to the exe wins (user-editable), else the
+    copy bundled inside the exe; source: src/models.json."""
     here = Path(__file__).resolve().parent
-    for cand in (here / "models.json",
+    for cand in (app_dir() / "models.json",        # frozen: editable copy next to the exe
+                 here / "models.json",             # frozen: bundled data (PyInstaller datas)
                  app_dir() / "src" / "models.json",
-                 app_dir() / "models.json",
                  app_dir() / "data" / "models.json"):
         if cand.exists():
             return cand
@@ -905,7 +907,68 @@ class CpuLabLauncher:
             pass
 
 
+def _selftest() -> int:
+    """--selftest: verify presets + composer WITHOUT opening a window.
+    The frozen exe has no console, so when frozen the report also lands in
+    %TEMP%/cpulab-launcher-selftest.txt."""
+    lines: list[str] = []
+    problems: list[str] = []
+
+    def out(text: str):
+        lines.append(text)
+        print(text)
+
+    out(f"{APP_NAME} v{APP_VERSION} selftest | engine pin {PINNED_BUILD}")
+    data, err = load_presets()
+    if err:
+        problems.append(err)
+    presets = list(data.get("presets", []))
+    out(f"models.json: {len(presets)} presets ({find_models_json()})")
+    if not presets:
+        problems.append("no presets loaded")
+    server = find_server()
+    out(f"llama-server: {server or 'NOT FOUND'}")
+    for p in presets:
+        st = harness_status(p, data.get("defaults", {}))
+        argv = compose_command(p, server=str(server or "llama-server.exe"),
+                               model_path="m.gguf",
+                               reasoning=p.get("reasoning_default", "medium"))
+        flags = [a for a in argv if a.startswith("-")]
+        tag = f"{p.get('id'):<24} {'ELIGIBLE' if st['eligible'] else 'blocked '} {st['reason'][:70]}"
+        out("  " + tag)
+        if len(flags) != len(set(flags)):
+            problems.append(f"{p.get('id')}: duplicate flags (D27)")
+        if "--reasoning-effort" in argv or "--tools" in argv:
+            problems.append(f"{p.get('id')}: banned flag emitted (D14/D30)")
+        if "--reasoning-budget" not in flags or "--host" not in flags:
+            problems.append(f"{p.get('id')}: chrome incomplete")
+        if "--port" not in flags:
+            problems.append(f"{p.get('id')}: port missing (D34)")
+        try:
+            json.loads(opencode_export(p, argv=argv,
+                                       reasoning=p.get("reasoning_default", "medium")))
+        except Exception as exc:
+            problems.append(f"{p.get('id')}: opencode export broken ({exc})")
+    if getattr(sys, "frozen", False):
+        report = Path(os.environ.get("TEMP", ".")) / "cpulab-launcher-selftest.txt"
+        try:
+            report.write_text("\n".join(lines + ([f"PROBLEMS: {problems}"] if problems else [])
+                                        + ["RESULT: " + ("FAIL" if problems else "PASS")]),
+                              encoding="utf-8")
+        except Exception:
+            pass
+    if problems:
+        for pb in problems:
+            out(f"FAIL: {pb}")
+        out("RESULT: FAIL")
+        return 1
+    out("RESULT: PASS")
+    return 0
+
+
 def main():
+    if "--selftest" in sys.argv:
+        sys.exit(_selftest())
     try:
         import ctypes
         ctypes.windll.shcore.SetProcessDpiAwareness(1)
