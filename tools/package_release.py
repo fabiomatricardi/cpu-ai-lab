@@ -154,11 +154,12 @@ def main() -> int:
         n_books = 0
         print("[warn] books_packaged/ missing - zip would ship WITHOUT books")
 
-    guide_files = sorted(p.name for p in guides_dst.iterdir())
-    pending = [g for g in ("01-webchat-exa.md", "02-opencode-pairing.md")
-               if g not in guide_files]
-    if pending:
-        print(f"[warn] guides pending (item 2.4, due Sun 11-01): {', '.join(pending)}")
+    # guides = the bookshelf (D41: books supersede standalone guide files)
+    staged_books = (len(list((guides_dst / "books").rglob("*.md")))
+                    if (guides_dst / "books").is_dir() else 0)
+    if not (guides_dst / "index.html").exists() or staged_books < 6:
+        print(f"[warn] bookshelf incomplete: need index.html + 6 books "
+              f"(found {staged_books} books)")
 
     # --- generated manifests ----------------------------------------------
     (stage / "VERSION.json").write_text(json.dumps({
@@ -183,7 +184,9 @@ def main() -> int:
         if p.is_file() and p.name != "SHA256SUMS.txt":
             rel = p.relative_to(stage).as_posix()
             sums.append(f"{sha256_file(p)}  {rel}")
-    (stage / "SHA256SUMS.txt").write_text("\n".join(sums) + "\n", encoding="utf-8")
+    # newline="" keeps the file LF: sha256sum -c rejects CRLF checksum files
+    (stage / "SHA256SUMS.txt").write_text("\n".join(sums) + "\n",
+                                          encoding="utf-8", newline="")
     print(f"[OK  ] staged {name}: {len(sums)} files, {len(presets)} presets")
 
     # --- frozen selftest FROM THE STAGING (acceptance) ---------------------
