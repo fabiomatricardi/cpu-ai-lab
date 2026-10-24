@@ -139,6 +139,21 @@ def main() -> int:
     guides_src = PACK / "guides"
     guides_dst = stage / "guides"
     shutil.copytree(guides_src, guides_dst)
+
+    # offline bookshelf (D40): reader ships under guides/ — minus authoring
+    # tooling (build.bat, CONTENT-GUIDE.md) and promotion shots (Bookshelf_*.jpg
+    # = landing-page assets, live in marketing/ only)
+    books_src = ROOT / "books_packaged"
+    if books_src.is_dir():
+        shutil.copytree(books_src, guides_dst, dirs_exist_ok=True,
+                        ignore=shutil.ignore_patterns(
+                            "build.bat", "CONTENT-GUIDE.md", "Bookshelf_*.jpg"))
+        n_books = len(list((books_src / "books").rglob("*.md")))
+        print(f"[OK  ] books: {n_books} titles from books_packaged/")
+    else:
+        n_books = 0
+        print("[warn] books_packaged/ missing - zip would ship WITHOUT books")
+
     guide_files = sorted(p.name for p in guides_dst.iterdir())
     pending = [g for g in ("01-webchat-exa.md", "02-opencode-pairing.md")
                if g not in guide_files]
@@ -157,6 +172,7 @@ def main() -> int:
             "provenance": provenance,
         },
         "presets": len(presets),
+        "books": n_books,
         "models_bundled": False,
         "package_date": date.today().isoformat(),
         "requirements": "Windows 10/11 x64; Vulkan GPU recommended (CPU-only works)",
