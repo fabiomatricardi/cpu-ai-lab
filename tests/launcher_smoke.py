@@ -153,12 +153,16 @@ def main():
             argv = L.compose_command(p, server="s", model_path="m", reasoning=lvl)
             cfg = json.loads(L.opencode_export(p, argv=argv, reasoning=lvl, port=11434))
             budget = L._budget_of(lvl)
-            check(f"{p['id']}/{lvl}: max_new_tokens > budget",
-                  cfg["max_new_tokens"] == budget + L.REASONING_SLACK
-                  and cfg["max_new_tokens"] > budget
-                  or (budget == 0 and cfg["max_new_tokens"] == L.REASONING_SLACK))
-            check(f"{p['id']}/{lvl}: context_window = -c",
-                  cfg["context_window"] == int(dict(L._flag_pairs(p["flags"]))["-c"]))
+            alias_key = str(p.get("alias") or p.get("id", "model"))
+            m = (cfg.get("provider", {}).get("local", {})
+                 .get("models", {}).get(alias_key, {}))
+            check(f"{p['id']}/{lvl}: limit.output = budget + slack (D42)",
+                  cfg.get("$schema") == "https://opencode.ai/config.json"
+                  and cfg.get("model") == f"local/{alias_key}"
+                  and m.get("limit", {}).get("output") == budget + L.REASONING_SLACK)
+            check(f"{p['id']}/{lvl}: limit.context = -c (D42)",
+                  m.get("limit", {}).get("context")
+                  == int(dict(L._flag_pairs(p["flags"]))["-c"]))
 
     # --- D34 port-busy detection -----------------------------------------
     s = socket.socket()
