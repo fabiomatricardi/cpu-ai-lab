@@ -205,10 +205,14 @@ def compose_command(preset: dict, *, server: str, model_path: str,
                     port: int = DEFAULT_PORT, threads: int = 4, ngl: int = DEFAULT_NGL,
                     ctx: int | None = None, kv: tuple[str, str] | None = None,
                     reasoning: str = "medium", mcp_proxy: bool = True,
-                    web_ui: bool = True) -> list[str]:
+                    web_ui: bool = True, temp: str | None = None,
+                    top_p: str | None = None, top_k: str | None = None,
+                    alias: str | None = None, extra: list[str] | None = None) -> list[str]:
     """Build the llama-server argv. Chrome (launcher-owned) + preset flags merged
     into one ordered map: preset wins where it owns the flag (-c, KV, sampling),
-    chrome supplies the security/port/UX flags. Duplicates impossible by construction."""
+    chrome supplies the security/port/UX flags. Duplicates impossible by construction.
+    D42: user overrides (sampling / alias / extra flags) replace values in place,
+    extra tokens are appended verbatim (last occurrence wins in llama-server)."""
     merged: OrderedDict[str, str | None] = OrderedDict()
 
     # 1) preset flags first (they own context, KV defaults, sampling, --spec-*)
@@ -239,17 +243,27 @@ def compose_command(preset: dict, *, server: str, model_path: str,
         key, val = item
         merged.setdefault(key, val)
 
-    # 3) explicit UI overrides (ctx / KV controls) - replace value, keep position
+    # 3) explicit UI overrides (ctx / KV / sampling / alias) - replace value, keep position
     if ctx is not None:
         merged["-c"] = str(int(ctx))
     if kv is not None:
         merged["-ctk"], merged["-ctv"] = kv
+    if temp:
+        merged["--temperature"] = str(temp)
+    if top_p:
+        merged["--top-p"] = str(top_p)
+    if top_k:
+        merged["--top-k"] = str(top_k)
+    if alias and str(alias).strip():
+        merged["--alias"] = str(alias).strip()
 
     argv = [str(server), "-m", str(model_path)]
     for key, val in merged.items():
         argv.append(key)
         if val is not None:
             argv.append(val)
+    if extra:
+        argv.extend(str(t) for t in extra)   # D42: escape hatch, appended as-is
     return argv
 
 
@@ -288,27 +302,31 @@ def port_busy(port: int, host: str = DEFAULT_HOST, timeout: float = 0.35) -> boo
 
 def opencode_export(preset: dict, *, argv: list[str], reasoning: str,
                     host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> str:
-    """OpenCode pairing snippet (D26/D30):
-    context_window = preset -c;  max_new_tokens = budget + slack (never <= budget)."""
+    """OpenCode pairing snippet (D42, schema per opencode.ai/docs):
+    provider = singular, npm = @ai-sdk/openai-compatible, models map keyed by the
+    --alias actually emitted, limit.output = budget + slack (never <= budget).
+    model = "local/<alias>" (provider_id/model_id per docs/models)."""
     pairs = dict(_flag_pairs(argv[argv.index("-m") + 2:]))  # skip server, -m and the path
     ctx = int(pairs.get("-c") or 32768)
     budget = _budget_of(reasoning)
-    temperature = pairs.get("--temperature") or pairs.get("--temp") or "1.0"
-    top_p = pairs.get("--top-p", "0.95")
+    alias = str(pairs.get("--alias") or preset.get("alias") or preset.get("id", "model"))
+    display = str(preset.get("name") or alias)
     cfg = {
+        "$schema": "https://opencode.ai/config.json",
+        "model": f"local/{alias}",
         "provider": {
-            "npm": "@ai-sdk/openai-compatible",
-            "name": "cpu-ai-lab",
-            "options": {"baseURL": f"http://{host}:{port}/v1", "apiKey": "local"},
+            "local": {
+                "npm": "@ai-sdk/openai-compatible",
+                "name": "llama-server (local) — CPU AI Lab",
+                "options": {"baseURL": f"http://{host}:{port}/v1", "apiKey": "local"},
+                "models": {
+                    alias: {
+                        "name": f"{display} (local)",
+                        "limit": {"context": ctx, "output": budget + REASONING_SLACK},
+                    }
+                },
+            }
         },
-        "model": str(preset.get("alias") or preset.get("id", "model")),
-        "context_window": ctx,
-        "max_new_tokens": budget + REASONING_SLACK,   # always > budget (D26)
-        "reasoning": {"level": reasoning, "budget": budget, "flag": f"--reasoning-budget {budget}"},
-        "sampling": {"temperature": temperature, "top_p": top_p},
-        "command": cmd_string(argv),
-        "note": "start the server first (launcher or the command above); "
-                "OpenCode talks to 127.0.0.1 only, --tools stays off server-side",
     }
     return json.dumps(cfg, indent=2)
 
@@ -526,12 +544,33 @@ class CpuLabLauncher:
         self.ctx_var.trace_add("write", lambda *_: self.refresh())
         self.model_var.trace_add("write", lambda *_: self.refresh())
 
-        # command preview (read-only) + actions
-        cmd_box = ttk.LabelFrame(right, text="Command preview (programmatic build, D27)", padding=6)
+        # command preview (programmatic build, D27) + live overrides (D42)
+        cmd_box = ttk.LabelFrame(right, text="Command preview — edits below apply live", padding=6)
         cmd_box.pack(fill="x", pady=(8, 0))
         self.cmd_text = tk.Text(cmd_box, height=5, wrap="word", font=("Consolas", 9),
                                 state="disabled", background="#f6f8fa")
         self.cmd_text.pack(fill="x")
+
+        samp = ttk.Frame(cmd_box)
+        samp.pack(fill="x", pady=(4, 0))
+        ttk.Label(samp, text="Sampling (blank = preset default):").pack(side="left")
+        self.temp_var = tk.StringVar()
+        self.top_p_var = tk.StringVar()
+        self.top_k_var = tk.StringVar()
+        self.alias_var = tk.StringVar()
+        for lbl, var, w in (("temp", self.temp_var, 6), ("top-p", self.top_p_var, 6),
+                            ("top-k", self.top_k_var, 6), ("alias", self.alias_var, 12)):
+            ttk.Label(samp, text=lbl).pack(side="left", padx=(8, 2))
+            ttk.Entry(samp, textvariable=var, width=w).pack(side="left")
+        extra_row = ttk.Frame(cmd_box)
+        extra_row.pack(fill="x", pady=(3, 0))
+        ttk.Label(extra_row, text="Extra flags (advanced):").pack(side="left")
+        self.extra_var = tk.StringVar()
+        ttk.Entry(extra_row, textvariable=self.extra_var).pack(
+            side="left", fill="x", expand=True, padx=(8, 0))
+        for var in (self.temp_var, self.top_p_var, self.top_k_var,
+                    self.alias_var, self.extra_var):
+            var.trace_add("write", lambda *_: self.refresh())
 
         actions = ttk.Frame(right)
         actions.pack(fill="x", pady=8)
@@ -636,6 +675,11 @@ class CpuLabLauncher:
         self.refresh()
 
     # ---- the one place the command is built --------------------------------
+    def _opt(self, var) -> str | None:
+        """D42: blank field = preset default (same contract as Context)."""
+        val = var.get().strip()
+        return val or None
+
     def _current_argv(self) -> list[str] | None:
         preset = self._selected_preset()
         if preset is None:
@@ -652,6 +696,10 @@ class CpuLabLauncher:
         if self.mode_var.get() == "harness":            # D31 remedy always on in Harness
             remedy = harness_status(preset, self.defaults)["kv"]
             kv = (remedy, remedy)
+        try:
+            extra = shlex.split(self.extra_var.get())
+        except ValueError:
+            extra = None
         return compose_command(
             preset,
             server=str(self.server_bin or "llama-server.exe"),
@@ -660,6 +708,9 @@ class CpuLabLauncher:
             ngl=DEFAULT_NGL if self.vulkan else 0,
             ctx=ctx, kv=kv,
             reasoning=self.reasoning_var.get(),
+            temp=self._opt(self.temp_var), top_p=self._opt(self.top_p_var),
+            top_k=self._opt(self.top_k_var), alias=self._opt(self.alias_var),
+            extra=extra or None,
         )
 
     def refresh(self):
@@ -778,7 +829,10 @@ class CpuLabLauncher:
         text = opencode_export(preset, argv=argv, reasoning=self.reasoning_var.get(), port=port)
         self.root.clipboard_clear()
         self.root.clipboard_append(text)
-        self.status_lbl.configure(text="OpenCode config copied (max_new_tokens = budget + 4096)")
+        self.status_lbl.configure(
+            text="OpenCode config copied (schema-valid: provider/local · "
+                 f"model local/{self.alias_var.get().strip() or 'alias'} · "
+                 "limit.output = budget + 4096)")
 
     def open_webchat(self):
         """Poll the port; when the server answers, open the built-in web chat."""
@@ -848,15 +902,12 @@ class CpuLabLauncher:
             else:
                 return
 
-        argv = compose_command(
-            preset, server=str(self.server_bin), model_path=model,
-            port=port, threads=self._threads(),
-            ngl=DEFAULT_NGL if self.vulkan else 0,
-            ctx=int(self.ctx_var.get()) if self.ctx_var.get().strip().isdigit() else None,
-            kv=((harness_status(preset, self.defaults)["kv"],) * 2
-                if self.mode_var.get() == "harness" else None),
-            reasoning=self.reasoning_var.get(),
-        )
+        # D42: one composition path — _current_argv() already carries every
+        # GUI override (port bump above included, it re-reads port_var).
+        argv = self._current_argv()
+        if argv is None:   # preset deselected between checks (defensive)
+            messagebox.showinfo(APP_NAME, "Select a preset first.")
+            return
         self._set_cmd(cmd_string(argv))
         self.log("$ " + cmd_string(argv))
         try:
@@ -871,8 +922,9 @@ class CpuLabLauncher:
             return
         self.start_btn.configure(state="disabled")
         self.stop_btn.configure(state="normal")
+        eff_alias = self.alias_var.get().strip() or preset.get("alias") or preset.get("id", "model")
         self.status_lbl.configure(
-            text=f"running on http://127.0.0.1:{port} · alias={preset.get('alias')} · --tools OFF")
+            text=f"running on http://127.0.0.1:{port} · alias={eff_alias} · --tools OFF")
         threading.Thread(target=self._read_log, daemon=True).start()
         threading.Thread(target=self._wait_exit, daemon=True).start()
 
@@ -945,10 +997,38 @@ def _selftest() -> int:
         if "--port" not in flags:
             problems.append(f"{p.get('id')}: port missing (D34)")
         try:
-            json.loads(opencode_export(p, argv=argv,
-                                       reasoning=p.get("reasoning_default", "medium")))
+            cfg = json.loads(opencode_export(p, argv=argv,
+                                             reasoning=p.get("reasoning_default", "medium")))
+            alias_key = str(p.get("alias") or p.get("id", "model"))
+            prov = cfg.get("provider", {}).get("local", {})
+            schema_ok = (
+                cfg.get("$schema") == "https://opencode.ai/config.json"
+                and cfg.get("model") == f"local/{alias_key}"
+                and "npm" in prov and alias_key in prov.get("models", {})
+                and prov["models"][alias_key].get("limit", {}).get("output", 0)
+                > _budget_of(p.get("reasoning_default", "medium"))
+            )
+            if not schema_ok:
+                problems.append(f"{p.get('id')}: opencode export not schema-valid (D42)")
         except Exception as exc:
             problems.append(f"{p.get('id')}: opencode export broken ({exc})")
+    # D42: override flow — sampling/alias/extra must reach argv AND the export
+    o = compose_command(presets[0], server="llama-server.exe", model_path="m.gguf",
+                        temp="0.7", top_p="0.9", top_k="40", alias="custom-a",
+                        extra=["--no-warmup", "--threads-batch", "3"])
+    for flag, val in (("--temperature", "0.7"), ("--top-p", "0.9"), ("--top-k", "40"),
+                      ("--alias", "custom-a")):
+        i = o.index(flag) if flag in o else -1
+        if i < 0 or o[i + 1] != val:
+            problems.append(f"override flow broken: {flag} not applied (D42)")
+            break
+    if "--no-warmup" not in o or "--threads-batch" not in o:
+        problems.append("override flow broken: extra flags not appended (D42)")
+    else:
+        exp = json.loads(opencode_export(presets[0], argv=o, reasoning="medium",
+                                         port=DEFAULT_PORT))
+        if exp.get("model") != "local/custom-a":
+            problems.append("override flow broken: export ignores overridden alias (D42)")
     if getattr(sys, "frozen", False):
         report = Path(os.environ.get("TEMP", ".")) / "cpulab-launcher-selftest.txt"
         try:
