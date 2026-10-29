@@ -164,6 +164,15 @@ def main():
                   m.get("limit", {}).get("context")
                   == int(dict(L._flag_pairs(p["flags"]))["-c"]))
 
+    # --- D43: export name = the GGUF actually served, not the preset ------
+    argv = L.compose_command(presets[0], server="s", model_path="X:/models/My-Custom.gguf",
+                             reasoning="medium", alias="my-custom")
+    cfg = json.loads(L.opencode_export(presets[0], argv=argv, reasoning="medium"))
+    m = cfg["provider"]["local"]["models"].get("my-custom", {})
+    check("export name = GGUF stem, not preset name (D43)",
+          m.get("name") == "My-Custom (local)"
+          and cfg.get("model") == "local/my-custom")
+
     # --- D34 port-busy detection -----------------------------------------
     s = socket.socket()
     s.bind(("127.0.0.1", 0))
@@ -198,6 +207,14 @@ def main():
             app.refresh()
             check("UI: command preview has budget 8192",
                   "--reasoning-budget 8192" in app.cmd_text.get("1.0", "end"))
+            # D43: custom GGUF + blank alias -> alias follows the file
+            app.model_var.set("C:/models/My Custom_LFM3.gguf")
+            app.alias_var.set("")
+            app.refresh()
+            preview = app.cmd_text.get("1.0", "end")
+            check("UI: blank alias follows custom GGUF stem (D43)",
+                  "--alias My-Custom_LFM3" in preview and "--alias granite" not in preview,
+                  preview[:200])
             root.destroy()
         except tk.TclError as exc:
             check("UI instantiate", False, str(exc))

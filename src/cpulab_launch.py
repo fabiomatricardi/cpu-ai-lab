@@ -310,7 +310,10 @@ def opencode_export(preset: dict, *, argv: list[str], reasoning: str,
     ctx = int(pairs.get("-c") or 32768)
     budget = _budget_of(reasoning)
     alias = str(pairs.get("--alias") or preset.get("alias") or preset.get("id", "model"))
-    display = str(preset.get("name") or alias)
+    # D43: display name = the GGUF actually served (never the highlighted preset's name)
+    model_path = str(argv[argv.index("-m") + 1])
+    stem = Path(model_path).stem if model_path.lower().endswith(".gguf") else ""
+    display = stem or str(preset.get("name") or alias)
     cfg = {
         "$schema": "https://opencode.ai/config.json",
         "model": f"local/{alias}",
@@ -700,6 +703,17 @@ class CpuLabLauncher:
             extra = shlex.split(self.extra_var.get())
         except ValueError:
             extra = None
+        alias = self._opt(self.alias_var)
+        if alias is None:
+            # D43: custom GGUF + blank alias -> alias follows the FILE, not the
+            # highlighted preset (sanitized so it stays a valid OpenCode model id)
+            model = self.model_var.get().strip()
+            if model.lower().endswith(".gguf"):
+                stem = Path(model).stem
+                if Path(_download_filename(preset)).stem.lower() != stem.lower():
+                    alias = "".join(
+                        ch if ch.isalnum() or ch in "._-" else "-" for ch in stem
+                    ).strip("-_") or None
         return compose_command(
             preset,
             server=str(self.server_bin or "llama-server.exe"),
@@ -709,7 +723,7 @@ class CpuLabLauncher:
             ctx=ctx, kv=kv,
             reasoning=self.reasoning_var.get(),
             temp=self._opt(self.temp_var), top_p=self._opt(self.top_p_var),
-            top_k=self._opt(self.top_k_var), alias=self._opt(self.alias_var),
+            top_k=self._opt(self.top_k_var), alias=alias,
             extra=extra or None,
         )
 
@@ -831,7 +845,6 @@ class CpuLabLauncher:
         self.root.clipboard_append(text)
         self.status_lbl.configure(
             text="OpenCode config copied (schema-valid: provider/local · "
-                 f"model local/{self.alias_var.get().strip() or 'alias'} · "
                  "limit.output = budget + 4096)")
 
     def open_webchat(self):
@@ -922,7 +935,8 @@ class CpuLabLauncher:
             return
         self.start_btn.configure(state="disabled")
         self.stop_btn.configure(state="normal")
-        eff_alias = self.alias_var.get().strip() or preset.get("alias") or preset.get("id", "model")
+        eff_alias = (argv[argv.index("--alias") + 1] if "--alias" in argv
+                     else preset.get("alias") or preset.get("id", "model"))
         self.status_lbl.configure(
             text=f"running on http://127.0.0.1:{port} · alias={eff_alias} · --tools OFF")
         threading.Thread(target=self._read_log, daemon=True).start()
@@ -1029,6 +1043,9 @@ def _selftest() -> int:
                                          port=DEFAULT_PORT))
         if exp.get("model") != "local/custom-a":
             problems.append("override flow broken: export ignores overridden alias (D42)")
+        name = exp["provider"]["local"]["models"]["custom-a"].get("name", "")
+        if name != "m (local)":   # model_path="m.gguf" -> stem, never the preset name
+            problems.append(f"D43: export name '{name}' != 'm (local)'")
     if getattr(sys, "frozen", False):
         report = Path(os.environ.get("TEMP", ".")) / "cpulab-launcher-selftest.txt"
         try:
